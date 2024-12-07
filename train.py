@@ -1,3 +1,4 @@
+import itertools
 import warnings
 
 import hydra
@@ -33,15 +34,12 @@ def main(config):
     else:
         device = config.trainer.device
 
-    # setup text_encoder
-    text_encoder = instantiate(config.text_encoder)
-
     # setup data_loader instances
     # batch_transforms should be put on device
-    dataloaders, batch_transforms = get_dataloaders(config, text_encoder, device)
+    dataloaders = get_dataloaders(config, device)  # , batch_transforms
 
     # build model architecture, then print to console
-    model = instantiate(config.model, n_tokens=len(text_encoder)).to(device)
+    model = instantiate(config.model).to(device)
     logger.info(model)
 
     # get function handles of loss and metrics
@@ -50,15 +48,21 @@ def main(config):
     metrics = {"train": [], "inference": []}
     for metric_type in ["train", "inference"]:
         for metric_config in config.metrics.get(metric_type, []):
-            # use text_encoder in metrics
-            metrics[metric_type].append(
-                instantiate(metric_config, text_encoder=text_encoder)
-            )
+            metrics[metric_type].append(instantiate(metric_config))
 
     # build optimizer, learning rate scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = instantiate(config.optimizer, params=trainable_params)
-    lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
+
+    trainable_params_disc = filter(
+        lambda p: p.requires_grad,
+        itertools.chain(model.mpd.parameters(), model.msd.parameters()),
+    )
+    optimizer_disc = instantiate(config.optimizer_disc, params=trainable_params_disc)
+    lr_scheduler_disc = instantiate(config.lr_scheduler_disc, optimizer=optimizer_disc)
+    trainable_params_gen = filter(
+        lambda p: p.requires_grad, model.generator.parameters()
+    )
+    optimizer_gen = instantiate(config.optimizer_gen, params=trainable_params_gen)
+    lr_scheduler_gen = instantiate(config.lr_scheduler_gen, optimizer=optimizer_gen)
 
     # epoch_len = number of iterations for iteration-based training
     # epoch_len = None or len(dataloader) for epoch-based training
@@ -68,9 +72,10 @@ def main(config):
         model=model,
         criterion=loss_function,
         metrics=metrics,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        text_encoder=text_encoder,
+        optimizer_disc=optimizer_disc,
+        optimizer_gen=optimizer_gen,
+        lr_scheduler_disc=lr_scheduler_disc,
+        lr_scheduler_gen=lr_scheduler_gen,
         config=config,
         device=device,
         dataloaders=dataloaders,

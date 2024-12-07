@@ -4,7 +4,6 @@ import pandas as pd
 
 from src.logger.utils import plot_spectrogram
 from src.metrics.tracker import MetricTracker
-from src.metrics.utils import calc_cer, calc_wer
 from src.trainer.base_trainer import BaseTrainer
 
 
@@ -38,20 +37,60 @@ class Trainer(BaseTrainer):
         metric_funcs = self.metrics["inference"]
         if self.is_train:
             metric_funcs = self.metrics["train"]
-            self.optimizer.zero_grad()
 
-        outputs = self.model(**batch)
-        batch.update(outputs)
+        audio = batch["audio"]
+        mel_spec = batch["mel_spec"]
+        gen_audio = self.model(mel_spec)
+        batch["generated_audio"] = gen_audio
 
-        all_losses = self.criterion(**batch)
-        batch.update(all_losses)
+        self.optimizer_disc.zero_grad()
 
-        if self.is_train:
-            batch["loss"].backward()  # sum of all losses is always called loss
-            self._clip_grad_norm()
-            self.optimizer.step()
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
+        output_p, output_pred_p, _, _ = self.mpd(audio, gen_audio.detach())
+        output_s, output_pred_s, _, _ = self.msd(audio, gen_audio.detach())
+
+        mpd_loss = self.criterion.discriminator_gan_loss(output_pred_p, output_p)
+        msd_loss = self.criterion.discriminator_gan_loss(output_pred_s, output_s)
+        loss = mpd_loss + msd_loss
+
+        loss.backward()
+        self._clip_grad_norm(self.model.mpd)
+        self._clip_grad_norm(self.model.msd)
+        self.optimizer_disc.step()
+        if self.lr_scheduler_disc is not None:
+            self.lr_scheduler_disc.step()
+
+        batch.update({"mpd_loss": mpd_loss, "msd_loss": msd_loss, "disc_loss": loss})
+
+        self.optimizer_gen.zero_grad()
+
+        mel_spec_loss = self.criterion.mel_loss(self.mel_spec(gen_audio), mel_spec)
+        output_p, output_pred_p, feature_maps_p, feature_maps_pred_p = self.mpd(
+            audio, gen_audio
+        )
+        output_s, output_pred_s, feature_maps_s, feature_maps_pred_s = self.msd(
+            audio, gen_audio
+        )
+        gan_loss = self.criterion.generator_gan_loss(
+            output_pred_p, output_p
+        ) + self.criterion.generator_gan_loss(output_pred_s, output_s)
+        fm_loss = self.criterion.fm_loss(
+            feature_maps_pred_p, feature_maps_p
+        ) + self.criterion.fm_loss(feature_maps_pred_s, feature_maps_s)
+        loss = fm_loss + gan_loss + mel_spec_loss
+        loss.backward()
+        self._clip_grad_norm(self.model.generator)
+        self.optimizer_gen.step()
+        if self.lr_scheduler_gen is not None:
+            self.lr_scheduler_gen.step()
+
+        batch.update(
+            {
+                "mel_spec_loss": mel_spec_loss,
+                "feature_matching_loss": fm_loss,
+                "generator_adv_loss": gan_loss,
+                "generator_loss": loss,
+            }
+        )
 
         # update metrics for each loss (in case of multiple losses)
         for loss_name in self.config.writer.loss_names:
@@ -79,45 +118,35 @@ class Trainer(BaseTrainer):
         # logging scheme might be different for different partitions
         if mode == "train":  # the method is called only every self.log_step steps
             self.log_spectrogram(**batch)
+            self.log_predictions(**batch)
         else:
             # Log Stuff
             self.log_spectrogram(**batch)
             self.log_predictions(**batch)
 
-    def log_spectrogram(self, spectrogram, **batch):
-        spectrogram_for_plot = spectrogram[0].detach().cpu()
+    def log_spectrogram(self, batch):
+        spectrogram_for_plot = batch["mel_spec"][0].detach().cpu()
         image = plot_spectrogram(spectrogram_for_plot)
-        self.writer.add_image("spectrogram", image)
+        self.writer.add_image("Initial melspectrogram", image)
+        spectrogram_for_plot = self.mel_spec(batch["generated_audio"])[0].detach().cpu()
+        image = plot_spectrogram(spectrogram_for_plot)
+        self.writer.add_image("Generated melspectrogram", image)
 
-    def log_predictions(
-        self, text, log_probs, log_probs_length, audio_path, examples_to_log=10, **batch
-    ):
-        # TODO add beam search
-        # Note: by improving text encoder and metrics design
-        # this logging can also be improved significantly
+    def log_predictions(self, batch, examples_to_log=10):
+        result = {}
+        examples_to_log = min(examples_to_log, batch["audio"].shape[0])
 
-        argmax_inds = log_probs.cpu().argmax(-1).numpy()
-        argmax_inds = [
-            inds[: int(ind_len)]
-            for inds, ind_len in zip(argmax_inds, log_probs_length.numpy())
-        ]
-        argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
-        argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
-        tuples = list(zip(argmax_texts, text, argmax_texts_raw, audio_path))
+        tuples = list(zip(batch["audio"], batch["generated_audio"]))
 
-        rows = {}
-        for pred, target, raw_pred, audio_path in tuples[:examples_to_log]:
-            target = self.text_encoder.normalize_text(target)
-            wer = calc_wer(target, pred) * 100
-            cer = calc_cer(target, pred) * 100
-
-            rows[Path(audio_path).name] = {
-                "target": target,
-                "raw prediction": raw_pred,
-                "predictions": pred,
-                "wer": wer,
-                "cer": cer,
+        for idx, (audio, gen_audio) in enumerate(tuples[:examples_to_log]):
+            result[idx] = {
+                "audio": self.writer.wandb.Audio(
+                    audio.squeeze(0).detach().cpu().numpy(), sample_rate=22050
+                ),
+                "generated_audio": self.writer.wandb.Audio(
+                    gen_audio.squeeze(0).detach().cpu().numpy(), sample_rate=22050
+                ),
             }
         self.writer.add_table(
-            "predictions", pd.DataFrame.from_dict(rows, orient="index")
+            "predictions", pd.DataFrame.from_dict(result, orient="index")
         )

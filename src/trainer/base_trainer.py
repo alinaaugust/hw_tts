@@ -8,6 +8,7 @@ from tqdm.auto import tqdm
 from src.datasets.data_utils import inf_loop
 from src.metrics.tracker import MetricTracker
 from src.utils.io_utils import ROOT_PATH
+from src.utils.spec_utils import MelSpectrogram, MelSpectrogramConfig
 
 
 class BaseTrainer:
@@ -20,9 +21,10 @@ class BaseTrainer:
         model,
         criterion,
         metrics,
-        optimizer,
-        lr_scheduler,
-        text_encoder,
+        optimizer_gen,
+        optimizer_disc,
+        lr_scheduler_gen,
+        lr_scheduler_disc,
         config,
         device,
         dataloaders,
@@ -42,7 +44,6 @@ class BaseTrainer:
             optimizer (Optimizer): optimizer for the model.
             lr_scheduler (LRScheduler): learning rate scheduler for the
                 optimizer.
-            text_encoder (CTCTextEncoder): text encoder.
             config (DictConfig): experiment config containing training config.
             device (str): device for tensors and model.
             dataloaders (dict[DataLoader]): dataloaders for different
@@ -70,10 +71,12 @@ class BaseTrainer:
 
         self.model = model
         self.criterion = criterion
-        self.optimizer = optimizer
-        self.lr_scheduler = lr_scheduler
-        self.text_encoder = text_encoder
+        self.optimizer_gen = optimizer_gen
+        self.optimizer_disc = optimizer_disc
+        self.lr_scheduler_gen = lr_scheduler_gen
+        self.lr_scheduler_disc = lr_scheduler_disc
         self.batch_transforms = batch_transforms
+        self.mel_spec = MelSpectrogram(MelSpectrogramConfig()).to(self.device)
 
         # define dataloaders
         self.train_dataloader = dataloaders["train"]
@@ -245,10 +248,10 @@ class BaseTrainer:
 
         logs = last_train_metrics
 
-        # Run val/test
-        for part, dataloader in self.evaluation_dataloaders.items():
-            val_logs = self._evaluation_epoch(epoch, part, dataloader)
-            logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
+        # # Run val/test
+        # for part, dataloader in self.evaluation_dataloaders.items():
+        #     val_logs = self._evaluation_epoch(epoch, part, dataloader)
+        #     logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
 
         return logs
 
@@ -376,14 +379,14 @@ class BaseTrainer:
                 )
         return batch
 
-    def _clip_grad_norm(self):
+    def _clip_grad_norm(self, submodel):
         """
         Clips the gradient norm by the value defined in
         config.trainer.max_grad_norm
         """
         if self.config["trainer"].get("max_grad_norm", None) is not None:
             clip_grad_norm_(
-                self.model.parameters(), self.config["trainer"]["max_grad_norm"]
+                self.submodel.parameters(), self.config["trainer"]["max_grad_norm"]
             )
 
     @torch.no_grad()
@@ -470,8 +473,10 @@ class BaseTrainer:
             "arch": arch,
             "epoch": epoch,
             "state_dict": self.model.state_dict(),
-            "optimizer": self.optimizer.state_dict(),
-            "lr_scheduler": self.lr_scheduler.state_dict(),
+            "optim_gen": self.optimizer_gen.state_dict(),
+            "optim_disc": self.optimizer_disc.state_dict(),
+            "lr_scheduler_gen": self.lr_scheduler_gen.state_dict(),
+            "lr_scheduler_disc": self.lr_scheduler_disc.state_dict(),
             "monitor_best": self.mnt_best,
             "config": self.config,
         }
@@ -514,19 +519,10 @@ class BaseTrainer:
             )
         self.model.load_state_dict(checkpoint["state_dict"])
 
-        # load optimizer state from checkpoint only when optimizer type is not changed.
-        if (
-            checkpoint["config"]["optimizer"] != self.config["optimizer"]
-            or checkpoint["config"]["lr_scheduler"] != self.config["lr_scheduler"]
-        ):
-            self.logger.warning(
-                "Warning: Optimizer or lr_scheduler given in the config file is different "
-                "from that of the checkpoint. Optimizer and scheduler parameters "
-                "are not resumed."
-            )
-        else:
-            self.optimizer.load_state_dict(checkpoint["optimizer"])
-            self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+        self.optimizer_gen.load_state_dict(checkpoint["optim_gen"])
+        self.optimizer_disc.load_state_dict(checkpoint["optim_disc"])
+        self.lr_scheduler_gen.load_state_dict(checkpoint["lr_scheduler_gen"])
+        self.lr_scheduler_disc.load_state_dict(checkpoint["lr_scheduler_disc"])
 
         self.logger.info(
             f"Checkpoint loaded. Resume training from epoch {self.start_epoch}"

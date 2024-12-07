@@ -6,8 +6,6 @@ import torch
 import torchaudio
 from torch.utils.data import Dataset
 
-from src.text_encoder import CTCTextEncoder
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,9 +20,8 @@ class BaseDataset(Dataset):
 
     def __init__(
         self,
-        index,
-        text_encoder=None,
-        target_sr=16000,
+        index=None,
+        target_sr=22050,
         limit=None,
         max_audio_length=None,
         max_text_length=None,
@@ -36,7 +33,6 @@ class BaseDataset(Dataset):
             index (list[dict]): list, containing dict for each element of
                 the dataset. The dict has required metadata information,
                 such as label and object path.
-            text_encoder (CTCTextEncoder): text encoder.
             target_sr (int): supported sample rate.
             limit (int | None): if not None, limit the total number of elements
                 in the dataset to 'limit' elements.
@@ -59,7 +55,6 @@ class BaseDataset(Dataset):
 
         self._index: list[dict] = index
 
-        self.text_encoder = text_encoder
         self.target_sr = target_sr
         self.instance_transforms = instance_transforms
 
@@ -82,7 +77,6 @@ class BaseDataset(Dataset):
         audio_path = data_dict["path"]
         audio = self.load_audio(audio_path)
         text = data_dict["text"]
-        text_encoded = self.text_encoder.encode(text)
 
         spectrogram = self.get_spectrogram(audio)
 
@@ -90,13 +84,9 @@ class BaseDataset(Dataset):
             "audio": audio,
             "spectrogram": spectrogram,
             "text": text,
-            "text_encoded": text_encoded,
             "audio_path": audio_path,
         }
 
-        # TODO think of how to apply wave augs before calculating spectrogram
-        # Note: you may want to preserve both audio in time domain and
-        # in time-frequency domain for logging
         instance_data = self.preprocess_data(instance_data)
 
         return instance_data
@@ -187,10 +177,7 @@ class BaseDataset(Dataset):
         initial_size = len(index)
         if max_text_length is not None:
             exceeds_text_length = (
-                np.array(
-                    [len(CTCTextEncoder.normalize_text(el["text"])) for el in index]
-                )
-                >= max_text_length
+                np.array([len(el["text"]) for el in index]) >= max_text_length
             )
             _total = exceeds_text_length.sum()
             logger.info(
