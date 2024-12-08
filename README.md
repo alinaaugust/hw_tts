@@ -1,18 +1,10 @@
-# Automatic Speech Recognition (ASR) with PyTorch
-
-<p align="center">
-  <a href="#about">About</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#how-to-use">How To Use</a> •
-  <a href="#credits">Credits</a> •
-  <a href="#license">License</a>
-</p>
+# Text-to-Speech with PyTorch
 
 ## About
 
-This repository contains a template for solving ASR task with PyTorch. This template branch is a part of the [HSE DLA course](https://github.com/markovka17/dla) ASR homework. Some parts of the code are missing (or do not follow the most optimal design choices...) and students are required to fill these parts themselves (as well as writing their own models, etc.).
+This repository contains my implementation of HiFiGan for speech generation. This task is a part of DLA course.
 
-See the task assignment [here](https://github.com/markovka17/dla/tree/2024/hw1_asr).
+See the task assignment [here]([https://github.com/markovka17/dla/tree/2024/hw1_asr](https://github.com/markovka17/dla/tree/2024/hw3_nv)).
 
 ## Installation
 
@@ -54,21 +46,18 @@ Follow these steps to install the project:
    pre-commit install
    ```
 
+## Disclaimer
+
+You probably don't want to use this repo for anything. Seriously, think twice. And read my report [here](https://wandb.ai/aavgustyonok/HiFiGan/reports/HiFiGan--VmlldzoxMDUxMzkwNw?accessToken=p3cv400ubv6dtw0idwqwn7c2x2ug3nzbs14c3gkev73m7zef6o2goea5mjjk5cqf) in order to understand that you don't want to do anything with this repo (except maybe for reading the code).
+
 ## How To Use
 
-To train a model, run the following command:
+To reproduce training, run the following command:
 
 ```bash
-python3 train.py -cn=CONFIG_NAME HYDRA_CONFIG_ARGUMENTS
+python3 train.py -cn=baseline -datasets.train.data_dir=r"PATH_TO_WAV_DIR"
 ```
 
-Where `CONFIG_NAME` is a config from `src/configs` and `HYDRA_CONFIG_ARGUMENTS` are optional arguments.
-
-To run inference (evaluate the model or save predictions):
-
-```bash
-python3 inference.py HYDRA_CONFIG_ARGUMENTS
-```
 
 ## Credits
 
