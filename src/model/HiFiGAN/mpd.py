@@ -21,12 +21,12 @@ class DiscriminatorP(nn.Module):
                         out_channels=self.channels[i + 1],
                         kernel_size=(self.kernel_size, 1),
                         stride=(self.stride, 1),
-                        padding=((self.kernel_size - 1) // 2, 0),
+                        padding=(2, 0),  # (self.kernel_size - 1) // 2
                     )
                 ),
                 nn.LeakyReLU(),
             )
-            for i in range(len(self.channels))
+            for i in range(len(self.channels) - 1)
         ]
 
         self.layers.append(
@@ -36,7 +36,7 @@ class DiscriminatorP(nn.Module):
                         in_channels=self.channels[-1],
                         out_channels=1024,
                         kernel_size=(5, 1),
-                        padding="same",
+                        padding=(1, 0),
                     )
                 ),
                 nn.LeakyReLU(),
@@ -54,17 +54,15 @@ class DiscriminatorP(nn.Module):
         self.layers = nn.ModuleList(self.layers)
 
     def forward(self, x):
-        batch_size, n_channels, time = x.shape
-
-        if time % self.period != 0:
-            x = F.pad(x, (0, self.period - (time % self.period)), "reflect")
-        x = x.reshape(batch_size, n_channels, time // self.period, self.period)
+        if x.shape[-1] % self.period != 0:
+            x = F.pad(x, (0, self.period - x.shape[-1] % self.period), "reflect")
+        x = x.reshape(x.shape[0], x.shape[1], x.shape[-1] // self.period, self.period)
 
         feature_maps = []
         for layer in self.layers:
             x = layer(x)
             feature_maps.append(x)
-        x = torch.flatten(x, 1, -1)
+        x = x.flatten(-2, -1)
 
         return x, feature_maps
 

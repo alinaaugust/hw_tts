@@ -1,5 +1,7 @@
 import torch
-from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
+
+from src.utils.spec_utils import MelSpectrogram, MelSpectrogramConfig
 
 
 def collate_fn(dataset_items: list[dict]):
@@ -15,18 +17,7 @@ def collate_fn(dataset_items: list[dict]):
             of the tensors.
     """
     result_batch = {}
-    result_batch["audio_path"] = [item["audio_path"] for item in dataset_items]
-    result_batch["audio"] = [item["audio"] for item in dataset_items]
-
-    result_batch["mel_spec"] = []
-    result_batch["spec_length"] = torch.tensor(
-        [item["mel_spec"].shape[2] for item in dataset_items]
-    )
-    for item in dataset_items:
-        result_batch["mel_spec"].append(item["mel_spec"].squeeze(0).T)
-
-    result_batch["mel_spec"] = pad_sequence(
-        result_batch["mel_spec"], batch_first=True
-    ).permute(0, 2, 1)
-
+    mel_spec_transform = MelSpectrogram(MelSpectrogramConfig)
+    result_batch["audio"] = torch.stack([item["audio"] for item in dataset_items])
+    result_batch["mel_spec"] = mel_spec_transform(result_batch["audio"]).squeeze(1)
     return result_batch

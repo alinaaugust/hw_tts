@@ -33,20 +33,20 @@ class Generator(nn.Module):
 
         self.layers = []
         for l in range(len(kernels_upsample)):
-            self.layers.append(nn.LeakyReLU())
             self.layers.append(
-                weight_norm(
-                    nn.ConvTranspose1d(
-                        in_channels=hidden_size // (2**l),
-                        out_channels=hidden_size // (2 ** (l + 1)),
-                        kernel_size=kernels_upsample[l],
-                        stride=kernels_upsample[l] // 2,
-                        padding=kernels_upsample[l] // 4,
-                    )
+                nn.Sequential(
+                    nn.LeakyReLU(),
+                    weight_norm(
+                        nn.ConvTranspose1d(
+                            in_channels=hidden_size // (2**l),
+                            out_channels=hidden_size // (2 ** (l + 1)),
+                            kernel_size=kernels_upsample[l],
+                            stride=kernels_upsample[l] // 2,
+                            padding=kernels_upsample[l] // 4,
+                        )
+                    ),
+                    MRF(hidden_size // (2 ** (l + 1)), kernel_sizes, dilations),
                 )
-            )
-            self.layers.append(
-                MRF(hidden_size // (2 ** (l + 1)), kernel_sizes, dilations)
             )
         self.layers = nn.Sequential(*self.layers)
 

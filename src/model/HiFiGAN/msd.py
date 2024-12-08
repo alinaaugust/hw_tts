@@ -28,8 +28,8 @@ class DiscriminatorS(nn.Module):
             nn.Sequential(
                 self.norm(
                     nn.Conv1d(
-                        in_channels=self.channels[i],
-                        out_channels=self.channels[i + 1],
+                        in_channels=self.n_channels[i],
+                        out_channels=self.n_channels[i + 1],
                         kernel_size=self.kernel_sizes[i],
                         stride=self.strides[i],
                         groups=self.groups[i],
@@ -38,13 +38,13 @@ class DiscriminatorS(nn.Module):
                 ),
                 nn.LeakyReLU(),
             )
-            for i in range(len(self.channels))
+            for i in range(len(self.n_channels) - 1)
         ]
 
         self.layers.append(
             self.norm(
                 nn.Conv1d(
-                    in_channels=self.channels[-1],
+                    in_channels=self.n_channels[-1],
                     out_channels=1,
                     kernel_size=3,
                     stride=1,

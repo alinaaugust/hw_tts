@@ -39,7 +39,7 @@ class ResBlock(nn.Module):
 
 class MRF(nn.Module):
     def __init__(
-        self, n_channels: int, kernel_sizes: List[int], dilations: List[List[int]]
+        self, n_channels: int, kernel_sizes: List[int], dilations: List[List[List[int]]]
     ):
         super().__init__()
         self.n_channels = n_channels

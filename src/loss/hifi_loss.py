@@ -8,7 +8,7 @@ from src.loss.melspec_loss import MelSpectrogramLoss
 
 
 class HiFiGanLoss(nn.Module):
-    def __init__(self, fm_lambda: int, mel_lambda: int):
+    def __init__(self, fm_lambda: int = 2, mel_lambda: int = 45):
         super().__init__()
         self.fm_loss = FeatureMatchingLoss(fm_lambda)
         self.mel_loss = MelSpectrogramLoss(mel_lambda)

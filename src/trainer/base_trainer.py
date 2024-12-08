@@ -75,7 +75,7 @@ class BaseTrainer:
         self.optimizer_disc = optimizer_disc
         self.lr_scheduler_gen = lr_scheduler_gen
         self.lr_scheduler_disc = lr_scheduler_disc
-        self.batch_transforms = batch_transforms
+        # self.batch_transforms = batch_transforms
         self.mel_spec = MelSpectrogram(MelSpectrogramConfig()).to(self.device)
 
         # define dataloaders
@@ -230,12 +230,20 @@ class BaseTrainer:
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
                 self.logger.debug(
-                    "Train Epoch: {} {} Loss: {:.6f}".format(
-                        epoch, self._progress(batch_idx), batch["loss"].item()
-                    )
+                    "Train Epoch: {} {} Generator loss: {:.6f} Discriminator loss: {:.6f} MelSpectrogram loss: {:.6f}".format(
+                        epoch,
+                        self._progress(batch_idx),
+                        batch["generator_loss"].item(),
+                        batch["disc_loss"].item(),
+                        batch["mel_spec_loss"].item(),
+                    ),
                 )
                 self.writer.add_scalar(
-                    "learning rate", self.lr_scheduler.get_last_lr()[0]
+                    "learning rate discriminator",
+                    self.lr_scheduler_disc.get_last_lr()[0],
+                )
+                self.writer.add_scalar(
+                    "learning rate generator", self.lr_scheduler_gen.get_last_lr()[0]
                 )
                 self._log_scalars(self.train_metrics)
                 self._log_batch(batch_idx, batch)
@@ -371,12 +379,12 @@ class BaseTrainer:
         """
         # do batch transforms on device
         transform_type = "train" if self.is_train else "inference"
-        transforms = self.batch_transforms.get(transform_type)
-        if transforms is not None:
-            for transform_name in transforms.keys():
-                batch[transform_name] = transforms[transform_name](
-                    batch[transform_name]
-                )
+        # transforms = self.batch_transforms.get(transform_type)
+        # if transforms is not None:
+        #     for transform_name in transforms.keys():
+        #         batch[transform_name] = transforms[transform_name](
+        #             batch[transform_name]
+        #         )
         return batch
 
     def _clip_grad_norm(self, submodel):

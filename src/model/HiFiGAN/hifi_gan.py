@@ -10,7 +10,9 @@ from src.model.HiFiGAN.msd import MSD
 
 
 class HiFiGan(nn.Module):
-    def __init__(self, generator_config: Dict, mpd_config: Dict, msd_config: Dict):
+    def __init__(
+        self, generator_config: Dict = {}, mpd_config: Dict = {}, msd_config: Dict = {}
+    ):
         super().__init__()
 
         self.generator = Generator(**generator_config)

@@ -45,8 +45,8 @@ class Trainer(BaseTrainer):
 
         self.optimizer_disc.zero_grad()
 
-        output_p, output_pred_p, _, _ = self.mpd(audio, gen_audio.detach())
-        output_s, output_pred_s, _, _ = self.msd(audio, gen_audio.detach())
+        output_p, output_pred_p, _, _ = self.model.mpd(audio, gen_audio.detach())
+        output_s, output_pred_s, _, _ = self.model.msd(audio, gen_audio.detach())
 
         mpd_loss = self.criterion.discriminator_gan_loss(output_pred_p, output_p)
         msd_loss = self.criterion.discriminator_gan_loss(output_pred_s, output_s)
@@ -64,15 +64,15 @@ class Trainer(BaseTrainer):
         self.optimizer_gen.zero_grad()
 
         mel_spec_loss = self.criterion.mel_loss(self.mel_spec(gen_audio), mel_spec)
-        output_p, output_pred_p, feature_maps_p, feature_maps_pred_p = self.mpd(
+        output_p, output_pred_p, feature_maps_p, feature_maps_pred_p = self.model.mpd(
             audio, gen_audio
         )
-        output_s, output_pred_s, feature_maps_s, feature_maps_pred_s = self.msd(
+        output_s, output_pred_s, feature_maps_s, feature_maps_pred_s = self.model.msd(
             audio, gen_audio
         )
         gan_loss = self.criterion.generator_gan_loss(
-            output_pred_p, output_p
-        ) + self.criterion.generator_gan_loss(output_pred_s, output_s)
+            output_pred_p
+        ) + self.criterion.generator_gan_loss(output_pred_s)
         fm_loss = self.criterion.fm_loss(
             feature_maps_pred_p, feature_maps_p
         ) + self.criterion.fm_loss(feature_maps_pred_s, feature_maps_s)
@@ -117,18 +117,20 @@ class Trainer(BaseTrainer):
 
         # logging scheme might be different for different partitions
         if mode == "train":  # the method is called only every self.log_step steps
-            self.log_spectrogram(**batch)
-            self.log_predictions(**batch)
+            self.log_spectrogram(batch)
+            self.log_predictions(batch)
         else:
             # Log Stuff
-            self.log_spectrogram(**batch)
-            self.log_predictions(**batch)
+            self.log_spectrogram(batch)
+            self.log_predictions(batch)
 
     def log_spectrogram(self, batch):
         spectrogram_for_plot = batch["mel_spec"][0].detach().cpu()
         image = plot_spectrogram(spectrogram_for_plot)
         self.writer.add_image("Initial melspectrogram", image)
-        spectrogram_for_plot = self.mel_spec(batch["generated_audio"])[0].detach().cpu()
+        spectrogram_for_plot = (
+            self.mel_spec(batch["generated_audio"])[0].squeeze(0).detach().cpu()
+        )
         image = plot_spectrogram(spectrogram_for_plot)
         self.writer.add_image("Generated melspectrogram", image)
 

@@ -2,7 +2,7 @@ defaults:
   - model: hifigan
   - writer: wandb
   - metrics: example
-  - datasets: onebatchtest
+  - datasets: train
   - dataloader: train
   - transforms: example
   - _self_
@@ -22,6 +22,8 @@ lr_scheduler_disc:
   gamma: 0.999
 loss_function:
   _target_: src.loss.HiFiGanLoss
+  fm_lambda: 2
+  mel_lambda: 45
 trainer:
   log_step: 50
   n_epochs: 50
