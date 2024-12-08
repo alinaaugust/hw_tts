@@ -1,3 +1,5 @@
 train:
   _target_: src.datasets.LJSpeechDataset
   part: "train"
+  data_dir: r"/kaggle/input/ljspeech/LJSpeech-1.1/wavs"
+  max_len: 8192

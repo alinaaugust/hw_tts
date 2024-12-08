@@ -82,7 +82,6 @@ def main(config):
         epoch_len=epoch_len,
         logger=logger,
         writer=writer,
-        # batch_transforms=batch_transforms,
         skip_oom=config.trainer.get("skip_oom", True),
     )
 

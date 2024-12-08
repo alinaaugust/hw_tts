@@ -75,7 +75,6 @@ class BaseTrainer:
         self.optimizer_disc = optimizer_disc
         self.lr_scheduler_gen = lr_scheduler_gen
         self.lr_scheduler_disc = lr_scheduler_disc
-        # self.batch_transforms = batch_transforms
         self.mel_spec = MelSpectrogram(MelSpectrogramConfig()).to(self.device)
 
         # define dataloaders
@@ -256,10 +255,8 @@ class BaseTrainer:
 
         logs = last_train_metrics
 
-        # # Run val/test
-        # for part, dataloader in self.evaluation_dataloaders.items():
-        #     val_logs = self._evaluation_epoch(epoch, part, dataloader)
-        #     logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
+        self.lr_scheduler_gen.step()
+        self.lr_scheduler_disc.step()
 
         return logs
 
@@ -379,12 +376,6 @@ class BaseTrainer:
         """
         # do batch transforms on device
         transform_type = "train" if self.is_train else "inference"
-        # transforms = self.batch_transforms.get(transform_type)
-        # if transforms is not None:
-        #     for transform_name in transforms.keys():
-        #         batch[transform_name] = transforms[transform_name](
-        #             batch[transform_name]
-        #         )
         return batch
 
     def _clip_grad_norm(self, submodel):
@@ -394,7 +385,7 @@ class BaseTrainer:
         """
         if self.config["trainer"].get("max_grad_norm", None) is not None:
             clip_grad_norm_(
-                self.submodel.parameters(), self.config["trainer"]["max_grad_norm"]
+                submodel.parameters(), self.config["trainer"]["max_grad_norm"]
             )
 
     @torch.no_grad()

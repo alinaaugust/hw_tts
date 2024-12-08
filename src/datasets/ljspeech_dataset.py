@@ -1,24 +1,13 @@
-import json
-import os
 import random
-import shutil
-from math import ceil
 from pathlib import Path
 
 import torchaudio
-import wget
-from torch.nn.functional import pad
-from tqdm import tqdm
-
-URL_LINKS = {
-    "train": "https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2",
-}
 
 
 class LJSpeechDataset:
     def __init__(
         self,
-        data_dir=r"C:\Users\alina\OneDrive\Desktop\учеба\звук\LJSpeech-1.1\train\wavs",
+        data_dir=r"/kaggle/input/ljspeech/LJSpeech-1.1/wavs",
         limit=None,
         max_len=8192,
         *args,
@@ -29,7 +18,8 @@ class LJSpeechDataset:
         self.max_len = max_len
 
         for audio_path in data_path.iterdir():
-            self.audio_paths.append(audio_path)
+            if audio_path[-4:] == ".wav":
+                self.audio_paths.append(audio_path)
 
         self.audio_paths.sort()
 

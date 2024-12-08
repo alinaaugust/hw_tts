@@ -56,8 +56,6 @@ class Trainer(BaseTrainer):
         self._clip_grad_norm(self.model.mpd)
         self._clip_grad_norm(self.model.msd)
         self.optimizer_disc.step()
-        if self.lr_scheduler_disc is not None:
-            self.lr_scheduler_disc.step()
 
         batch.update({"mpd_loss": mpd_loss, "msd_loss": msd_loss, "disc_loss": loss})
 
@@ -80,8 +78,6 @@ class Trainer(BaseTrainer):
         loss.backward()
         self._clip_grad_norm(self.model.generator)
         self.optimizer_gen.step()
-        if self.lr_scheduler_gen is not None:
-            self.lr_scheduler_gen.step()
 
         batch.update(
             {
